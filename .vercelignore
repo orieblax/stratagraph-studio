@@ -1,0 +1,11 @@
+# Ignore backend, virtualenvs, and data files from Vercel deployment bundle
+backend/
+backend/.venv/
+docker/
+docker-compose.yml
+.git/
+.github/
+docs/
+scripts/
+*.log
+*.tmp

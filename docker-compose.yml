@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  postgres-pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: stratagraph-postgres-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stratagraph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stratagraph_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-stratagraph_studio}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stratagraph} -d ${POSTGRES_DB:-stratagraph_studio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stratagraph-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: stratagraph-backend
+    restart: unless-stopped
+    depends_on:
+      postgres-pgvector:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stratagraph}:${POSTGRES_PASSWORD:-stratagraph_secure_password}@postgres-pgvector:5432/${POSTGRES_DB:-stratagraph_studio}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-insecure_dev_jwt_secret_change_in_production_min32chars}
+      JWT_ALGORITHM: HS256
+      SAFE_UPLOAD_DIR: /app/safe_uploads
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      RERANKER_DEVICE_POLICY: ${RERANKER_DEVICE_POLICY:-onnx-int8}
+    volumes:
+      - safe_uploads:/app/safe_uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - stratagraph-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: stratagraph-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - stratagraph-net
+
+volumes:
+  pgdata:
+    driver: local
+  safe_uploads:
+    driver: local
+
+networks:
+  stratagraph-net:
+    driver: bridge

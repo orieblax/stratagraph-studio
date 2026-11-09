@@ -1,0 +1,28 @@
+{
+  "name": "stratagraph-studio-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise Visual Agentic Orchestration, Medallion RAG & MCP Control Plane",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "start": "npm run start --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "typecheck": "npm run typecheck --prefix frontend",
+    "test:frontend": "npm run test --prefix frontend",
+    "deploy:vercel": "vercel --cwd frontend",
+    "deploy:vercel:prod": "vercel --prod --cwd frontend"
+  },
+  "keywords": [
+    "langgraph",
+    "pydantic-ai",
+    "react-flow",
+    "fastapi",
+    "mcp",
+    "rag",
+    "databricks",
+    "pgvector"
+  ],
+  "author": "StrataGraph Studio Team",
+  "license": "Apache-2.0"
+}
