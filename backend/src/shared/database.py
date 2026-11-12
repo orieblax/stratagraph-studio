@@ -12,21 +12,33 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 DEFAULT_DATABASE_URL = (
     "postgresql+asyncpg://stratagraph:stratagraph_secure_password@localhost:5432/stratagraph_studio"
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+_IS_TESTING = os.getenv("ENVIRONMENT") == "testing"
 
 # Configure SQLAlchemy 2.0 Async Engine with robust pooling
-engine: AsyncEngine = create_async_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    echo=False,
-    future=True,
+# Use NullPool under test environments so per-test event loops never share asyncpg connections.
+engine: AsyncEngine = (
+    create_async_engine(
+        DATABASE_URL,
+        poolclass=NullPool,
+        echo=False,
+        future=True,
+    )
+    if _IS_TESTING
+    else create_async_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        echo=False,
+        future=True,
+    )
 )
 
 async_session_factory = async_sessionmaker(
