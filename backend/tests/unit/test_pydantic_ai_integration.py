@@ -13,6 +13,7 @@ from src.modules.orchestration.infrastructure.nodes.synthesis_output_guardrail_n
     synthesis_output_guardrail_node,
 )
 from src.modules.orchestration.infrastructure.pydantic_ai.agents import (
+    build_deterministic_synthesis,
     create_guardrail_agent,
     create_router_agent,
     create_synthesis_agent,
@@ -145,3 +146,32 @@ async def test_synthesis_output_guardrail_node_integrates_pydantic_ai() -> None:
     assert "synthesized_output" in res
     assert "structured_synthesis" in res
     assert res["total_tokens"] > 50
+    assert "Unity Catalog" in res["synthesized_output"]
+    assert "### Summary\na" not in res["synthesized_output"]
+    assert "c1" in res["structured_synthesis"]["citations"]
+
+
+def test_build_deterministic_synthesis_strips_spotlight_tags() -> None:
+    """Verify deterministic offline synthesis removes XML spotlighting boundaries cleanly."""
+    deps = SynthesisDeps(
+        user_query="How does Delta Sync work?",
+        context_chunks=[
+            {
+                "chunk_id": "chunk_delta_01",
+                "content": (
+                    '<untrusted_context_deadbeef12345678 source="chunk_delta_01">\n'
+                    "Delta Sync keeps Vector Search indexes synchronized with Delta tables.\n"
+                    "</untrusted_context_deadbeef12345678>"
+                ),
+            }
+        ],
+        mcp_scratchpad=[{"tool": "inspect_local_schema", "output": "3 tables"}],
+        correlation_id="corr_strip_test",
+    )
+
+    synth = build_deterministic_synthesis(deps)
+    assert "Delta Sync" in synth.summary
+    assert "untrusted_context" not in synth.summary
+    assert "untrusted_context" not in synth.detailed_answer
+    assert synth.citations == ["chunk_delta_01"]
+    assert any("inspect_local_schema" in f for f in synth.key_findings)

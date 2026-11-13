@@ -1,6 +1,7 @@
 """Pydantic AI integration for type-safe structured micro-agents within LangGraph."""
 
 from src.modules.orchestration.infrastructure.pydantic_ai.agents import (
+    build_deterministic_synthesis,
     create_guardrail_agent,
     create_router_agent,
     create_synthesis_agent,
@@ -17,6 +18,7 @@ from src.modules.orchestration.infrastructure.pydantic_ai.models import (
 )
 
 __all__ = [
+    "build_deterministic_synthesis",
     "create_guardrail_agent",
     "create_router_agent",
     "create_synthesis_agent",

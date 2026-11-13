@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -16,11 +17,18 @@ os.environ["JWT_SECRET_KEY"] = "test_secret_key_minimum_32_characters_long_for_c
 os.environ["SAFE_UPLOAD_DIR"] = "/tmp/safe_uploads"
 
 
-@pytest.fixture(autouse=True)
-def clean_ephemeral_vault() -> None:
-    """Ensure EphemeralSecretVault is pristine before and after every test."""
+def _clear_shared_state() -> None:
+    """Reset in-memory ephemeral secrets and L1 semantic cache between tests."""
+    from src.modules.cost_optimization.infrastructure.semantic_cache import TwoTierPgVectorCache
     from src.shared.ephemeral_secrets import EphemeralSecretVault
 
     EphemeralSecretVault.clear()
+    TwoTierPgVectorCache._shared_mem_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def clean_ephemeral_vault() -> Iterator[None]:
+    """Ensure EphemeralSecretVault and in-memory L1 cache are pristine before/after each test."""
+    _clear_shared_state()
     yield
-    EphemeralSecretVault.clear()
+    _clear_shared_state()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
@@ -90,12 +91,72 @@ def create_router_agent(
     return agent
 
 
+def _strip_spotlight_tags(text: str) -> str:
+    """Remove spotlighting XML wrapper tags when falling back to wrapped chunk content."""
+    return re.sub(r"</?untrusted_context[^>]*>", "", text).strip()
+
+
+def build_deterministic_synthesis(deps: SynthesisDeps) -> StructuredSynthesis:
+    """Build a context-grounded StructuredSynthesis for offline/TestModel execution."""
+    clean_snippets: list[str] = []
+    citations: list[str] = []
+
+    for idx, chunk in enumerate(deps.context_chunks[:5], start=1):
+        raw = str(chunk.get("raw_content") or chunk.get("content") or "")
+        cleaned = " ".join(_strip_spotlight_tags(raw).split())
+        if cleaned:
+            clean_snippets.append(cleaned)
+        cid = str(chunk.get("chunk_id") or chunk.get("id") or f"chunk_{idx}")
+        citations.append(cid)
+
+    tool_notes = [
+        f"Tool {entry.get('tool', 'unknown')}: {entry.get('output') or entry.get('message') or 'executed'}"
+        for entry in deps.mcp_scratchpad[:5]
+    ]
+
+    lead_evidence = (
+        clean_snippets[0]
+        if clean_snippets
+        else (tool_notes[0] if tool_notes else "No external context chunks were required.")
+    )
+    summary = (
+        f"Synthesis for '{deps.user_query}': {lead_evidence}" if deps.user_query else lead_evidence
+    )
+
+    detail_sections: list[str] = []
+    if deps.user_query:
+        detail_sections.append(f"Addressing query: {deps.user_query}.")
+    if clean_snippets:
+        detail_sections.append("Retrieved context evidence:\n" + "\n".join(clean_snippets))
+    if tool_notes:
+        detail_sections.append("Tool execution results:\n" + "\n".join(tool_notes))
+
+    detailed_answer = "\n\n".join(detail_sections) or summary
+    key_findings = [s[:220] for s in (clean_snippets + tool_notes)[:5]]
+
+    return StructuredSynthesis(
+        summary=summary,
+        detailed_answer=detailed_answer,
+        key_findings=key_findings,
+        citations=citations,
+        confidence_score=0.88 if (clean_snippets or tool_notes) else 0.65,
+        suggested_next_steps=[
+            "Inspect cited chunks and execution telemetry in the Inspector Drawer."
+        ],
+    )
+
+
 def create_synthesis_agent(
     model: str | Model | None = None,
     provider: str = "openai",
+    deps: SynthesisDeps | None = None,
 ) -> Agent[SynthesisDeps, StructuredSynthesis]:
     """Create a type-safe Pydantic AI Synthesis Agent."""
     target_model = resolve_model(model, provider=provider, task="synthesis")
+    if model is None and isinstance(target_model, TestModel) and deps is not None:
+        target_model = TestModel(
+            custom_output_args=build_deterministic_synthesis(deps).model_dump()
+        )
 
     agent: Agent[SynthesisDeps, StructuredSynthesis] = Agent(
         target_model,

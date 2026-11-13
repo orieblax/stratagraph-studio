@@ -95,7 +95,6 @@ async def synthesis_output_guardrail_node(
         },
     ]
 
-    synthesis_agent = create_synthesis_agent(provider=decision.provider)
     synth_deps = SynthesisDeps(
         user_query=query,
         context_chunks=chunks,
@@ -103,6 +102,7 @@ async def synthesis_output_guardrail_node(
         correlation_id=cid,
         provider=decision.provider,
     )
+    synthesis_agent = create_synthesis_agent(provider=decision.provider, deps=synth_deps)
 
     pydantic_synthesis: dict[str, Any] | None = None
     raw_output: str = ""
@@ -122,7 +122,7 @@ async def synthesis_output_guardrail_node(
         if structured_ans.citations:
             raw_output += f"\n\n*Citations: {', '.join(structured_ans.citations)}*"
 
-        usage = synth_res.usage()
+        usage = synth_res.usage
         if usage:
             in_tokens = usage.input_tokens or in_tokens
             out_tokens = usage.output_tokens or out_tokens
